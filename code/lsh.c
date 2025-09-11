@@ -26,12 +26,15 @@
 
 // The <unistd.h> header is your gateway to the OS's process management facilities.
 #include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 
 #include "parse.h"
 
 static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
 void stripwhite(char *);
+static void exec_cmd(Command *cmd);
 
 int main(void)
 {
@@ -39,6 +42,13 @@ int main(void)
   {
     char *line;
     line = readline("> ");
+
+    // Handle Ctrl-D, readline returns NULL when EOF is encountered
+    if (line == NULL)
+    {
+      printf("Ctrl-D (EOF) detected, exit!\n");
+      break; // Exit 
+    }
 
     // Remove leading and trailing whitespace from the line
     stripwhite(line);
@@ -51,8 +61,8 @@ int main(void)
       Command cmd;
       if (parse(line, &cmd) == 1)
       {
-        // Just prints cmd
         print_cmd(&cmd);
+        exec_cmd(&cmd);
       }
       else
       {
@@ -66,6 +76,49 @@ int main(void)
 
   return 0;
 }
+
+
+/*
+ * Execute after parse
+ */
+static void exec_cmd(Command *cmd)
+{
+  // char *path = getenv("PATH");
+  // printf("PATH: %s\n\n", path);
+
+
+  if (cmd->pgm == NULL) {
+    return;
+  }
+
+  Pgm *pgm = cmd->pgm;
+  
+  // Get the command name and arguments
+  char **args = pgm->pgmlist;
+  if (args == NULL || args[0] == NULL) {
+    return;
+  }
+
+  pid_t pid = fork();
+  
+  if (pid == 0) {
+    execvp(args[0], args);     // Child process execute the cmd
+    // execvp fail
+    perror(args[0]);
+    exit(1);
+  }
+  else if (pid > 0) {  // Parent process wait for child 
+    int status;
+    waitpid(pid, &status, 0);
+  }
+  else {
+    perror("fork");
+  }
+}
+
+
+
+
 
 /*
  * Print a Command structure as returned by parse on stdout.
@@ -82,6 +135,7 @@ static void print_cmd(Command *cmd_list)
   printf("Pgms:\n");
   print_pgm(cmd_list->pgm);
   printf("------------------------------\n");
+  printf("Exec result:\n");
 }
 
 /* Print a (linked) list of Pgm:s.
