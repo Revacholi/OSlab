@@ -33,6 +33,8 @@
 
 #include "parse.h"
 
+#define READ_END 0
+#define WRITE_END 1
 
 static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
@@ -121,6 +123,39 @@ static void exec_cmd(Command *cmd)
   if (args == NULL || args[0] == NULL) {
     return;
   }
+  
+  // check if there are multiple commands (then we have pipes)
+  if (pgm->next) {
+    // Create array of two pipe "ends". We will write and read to each end.
+    int pipe_descriptors[2];
+    // Try to create a pipe. If it fails print pipe error and return
+    if(pipe(pipe_descriptors) < 0) {
+      printf("Pipe error!");
+      return;
+    }
+
+    pid_t pid_pipe = fork();
+    int fdp;
+
+    if (pid_pipe > 0) {   // Parent process closes read end
+      close(pipe_descriptors[READ_END]);
+      
+      // if open fail or no target file
+      if ((fdp = open(cmd->rstdin, O_RDONLY)) == -1){   
+        perror("open rstdin");
+        exit(1);
+      }
+      else {
+        // duplicate old fd into stdin
+        dup2(fdp, pipe_descriptors[WRITE_END]);  
+        close(fdp);
+      }
+    }
+    else if (pid_pipe == 0) {  // Child process closes write end
+      close(pipe_descriptors[WRITE_END]);
+    }
+  }
+
 
   if (!strcmp("cd", args[0]))
   {
@@ -175,7 +210,7 @@ static void exec_cmd(Command *cmd)
         close(fd);
       }
     }
-
+    
     execvp(args[0], args);     // Child process execute the cmd
     // execvp fail
     perror(args[0]);
