@@ -38,7 +38,7 @@ static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
 void stripwhite(char *);
 static void exec_cmd(Command *cmd);
-static void intHandler(int dummy);
+static void intHandler();
 
 int main(void)
 {
@@ -164,12 +164,10 @@ static void exec_cmd(Command *cmd)
 /*
  * Handle Ctrl-C signal (SIGINT)
  */
-static void intHandler() {
-  // kill(0, SIGINT); // Send SIGINT to all processes in the current process group
-  // printf("\n");
+static void intHandler() { 
+  printf("\n");
   return;
 } 
-
 
 
 /*
