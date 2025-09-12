@@ -39,13 +39,17 @@ static void print_pgm(Pgm *p);
 void stripwhite(char *);
 static void exec_cmd(Command *cmd);
 static void intHandler();
+static int should_exit = 0;
 
 int main(void)
 {
+  char buff[256];
   for (;;)
   {
     char *line;
-    line = readline("> ");
+
+    // Potentially allows for an error if buff cannot fit cwd + "> "
+    line = readline(strcat(getcwd(buff, 254), "> "));
 
     // Handle Ctrl-D, readline returns NULL when EOF is 
     if (line == NULL)  
@@ -79,6 +83,11 @@ int main(void)
 
     // Clear memory
     free(line);
+
+    if (should_exit)
+    {
+      break;
+    }
   }
 
   return 0;
@@ -105,6 +114,29 @@ static void exec_cmd(Command *cmd)
   if (args == NULL || args[0] == NULL) {
     return;
   }
+
+  if (!strcmp("cd", args[0]))
+  {
+    char *dir;
+    if (args[1] != NULL)
+    {
+      dir = args[1];
+    }
+    else
+    {
+      dir = getenv("HOME");
+    }
+    if (chdir(dir))
+    {
+      perror(args[1]);
+    }
+    return;
+  } else if (!strcmp("exit", args[0]))
+  {
+    should_exit = 1;
+    return;
+  }
+  
 
   pid_t pid = fork();
   
