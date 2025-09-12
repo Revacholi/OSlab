@@ -125,7 +125,9 @@ static void exec_cmd(Command *cmd)
   }
   
   // check if there are multiple commands (then we have pipes)
-  if (pgm->next) {
+  Pgm *ppgm = pgm;
+  while (ppgm->next) {
+    ppgm = pgm->next;
     // Create array of two pipe "ends". We will write and read to each end.
     int pipe_descriptors[2];
     // Try to create a pipe. If it fails print pipe error and return
@@ -135,24 +137,20 @@ static void exec_cmd(Command *cmd)
     }
 
     pid_t pid_pipe = fork();
-    int fdp;
 
     if (pid_pipe > 0) {   // Parent process closes read end
       close(pipe_descriptors[READ_END]);
       
-      // if open fail or no target file
-      if ((fdp = open(cmd->rstdin, O_RDONLY)) == -1){   
-        perror("open rstdin");
-        exit(1);
-      }
-      else {
-        // duplicate old fd into stdin
-        dup2(fdp, pipe_descriptors[WRITE_END]);  
-        close(fdp);
-      }
+      // set output to pipe
+      dup2(pipe_descriptors[WRITE_END], STDOUT_FILENO);  
+      close(pipe_descriptors[WRITE_END]);
     }
     else if (pid_pipe == 0) {  // Child process closes write end
       close(pipe_descriptors[WRITE_END]);
+      
+      // set output to pipe
+      dup2(pipe_descriptors[READ_END], STDIN_FILENO);  
+      close(pipe_descriptors[READ_END]);
     }
   }
 
