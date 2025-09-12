@@ -39,11 +39,16 @@ static void print_pgm(Pgm *p);
 void stripwhite(char *);
 static void exec_cmd(Command *cmd);
 static void intHandler();
+static void chldHandler();
+
+static pid_t foreground = 0; // PID of current foreground process
 
 int main(void)
 {
   for (;;)
   {
+    foreground = 0;
+
     char *line;
     line = readline("> ");
 
@@ -56,6 +61,8 @@ int main(void)
 
     // Handle Ctrl-C, terminate the current foreground process    
     signal(SIGINT, intHandler);
+    // Handle Zombies
+    signal(SIGCHLD, chldHandler);
 
     // Remove leading and trailing whitespace from the line
     stripwhite(line);
@@ -148,9 +155,11 @@ static void exec_cmd(Command *cmd)
       return; 
     }
     else {
+      foreground = pid;  // Set the foreground process PID
       printf("Waiting for process PID: %d\n", pid);
       int status;
       waitpid(pid, &status, 0);
+      foreground = 0; // Reset foreground PID
     }
 
   }
@@ -169,6 +178,21 @@ static void intHandler() {
   return;
 } 
 
+
+/*
+ * Handle Zombies (SIGCHLD)
+ */
+static void chldHandler() {
+  pid_t pid;
+  int status;
+
+  while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    if (pid != foreground) {
+      printf("Zombie %d Killed\n", pid);
+    }
+  }
+
+}
 
 /*
  * Print a Command structure as returned by parse on stdout.
