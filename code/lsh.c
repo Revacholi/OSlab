@@ -40,7 +40,7 @@ static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
 void stripwhite(char *);
 static void exec_cmd(Command *cmd);
-static void intHandler();
+static void intHandler(int dummy);
 static int should_exit = 0;
 static void chldHandler();
 
@@ -124,35 +124,6 @@ static void exec_cmd(Command *cmd)
     return;
   }
   
-  // check if there are multiple commands (then we have pipes)
-  Pgm *ppgm = pgm;
-  while (ppgm->next) {
-    ppgm = pgm->next;
-    // Create array of two pipe "ends". We will write and read to each end.
-    int pipe_descriptors[2];
-    // Try to create a pipe. If it fails print pipe error and return
-    if(pipe(pipe_descriptors) < 0) {
-      printf("Pipe error!");
-      return;
-    }
-
-    pid_t pid_pipe = fork();
-
-    if (pid_pipe > 0) {   // Parent process closes read end
-      close(pipe_descriptors[READ_END]);
-      
-      // set output to pipe
-      dup2(pipe_descriptors[WRITE_END], STDOUT_FILENO);  
-      close(pipe_descriptors[WRITE_END]);
-    }
-    else if (pid_pipe == 0) {  // Child process closes write end
-      close(pipe_descriptors[WRITE_END]);
-      
-      // set output to pipe
-      dup2(pipe_descriptors[READ_END], STDIN_FILENO);  
-      close(pipe_descriptors[READ_END]);
-    }
-  }
 
 
   if (!strcmp("cd", args[0]))
@@ -182,6 +153,43 @@ static void exec_cmd(Command *cmd)
   
   if (pid == 0) {
     // Child process
+
+    // check if there are multiple commands (then we have pipes)
+    Pgm *ppgm = pgm;
+    while (ppgm->next) {
+      ppgm = ppgm->next;
+      // Create array of two pipe "ends". We will write and read to each end.
+      int pipe_descriptors[2];
+      // Try to create a pipe. If it fails print pipe error and return
+      if(pipe(pipe_descriptors) < 0) {
+        printf("Pipe error!");
+        return;
+      }
+
+      pid_t pid_pipe = fork();
+
+      if (pid_pipe == 0) {  // Child process closes write end
+        close(pipe_descriptors[WRITE_END]);
+        
+        // set output to pipe
+        dup2(pipe_descriptors[READ_END], STDIN_FILENO);  
+        close(pipe_descriptors[READ_END]);
+
+        char **pargs = ppgm->pgmlist;
+        execvp(pargs[0], pargs);     // Parent process execute the cmd
+        // execvp fail
+        perror(pargs[0]);
+        exit(1);     
+      }
+      else if (pid_pipe > 0) {   // Parent process closes read end
+        close(pipe_descriptors[READ_END]);
+        
+        // set output to pipe
+        dup2(pipe_descriptors[WRITE_END], STDOUT_FILENO);  
+        close(pipe_descriptors[WRITE_END]);
+        }
+    }
+    
 
     // Handle input redirection
     if (cmd -> rstdin) {
@@ -238,7 +246,7 @@ static void exec_cmd(Command *cmd)
 /*
  * Handle Ctrl-C signal (SIGINT)
  */
-static void intHandler() { 
+static void intHandler(int dummy) { 
   printf("\n");
   return;
 } 
