@@ -28,13 +28,17 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <signal.h>
 
 #include "parse.h"
+
 
 static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
 void stripwhite(char *);
 static void exec_cmd(Command *cmd);
+static void intHandler(int dummy);
 
 int main(void)
 {
@@ -43,12 +47,15 @@ int main(void)
     char *line;
     line = readline("> ");
 
-    // Handle Ctrl-D, readline returns NULL when EOF is encountered
-    if (line == NULL)
+    // Handle Ctrl-D, readline returns NULL when EOF is 
+    if (line == NULL)  
     {
       printf("Ctrl-D (EOF) detected, exit!\n");
       break; // Exit 
     }
+
+    // Handle Ctrl-C, terminate the current foreground process    
+    signal(SIGINT, intHandler);
 
     // Remove leading and trailing whitespace from the line
     stripwhite(line);
@@ -102,14 +109,50 @@ static void exec_cmd(Command *cmd)
   pid_t pid = fork();
   
   if (pid == 0) {
+    // Child process
+
+    // Handle input redirection
+    if (cmd -> rstdin) {
+      int fd;
+      if ((fd = open(cmd->rstdin, O_RDONLY)) == -1){   // if open fail or no target file
+        perror("open rstdin");
+        exit(1);
+      }
+      else {
+        dup2(fd, STDIN_FILENO);  // duplicate old fd into stdin
+        close(fd);
+      }
+    }
+
+    // Handle output redirection
+    if (cmd -> rstdout) {
+      int fd;
+      if ((fd = open(cmd->rstdout, O_WRONLY | O_CREAT)) == -1){ // if open fail or no target file
+        perror("open rstdout");
+        exit(1);
+      }
+      else {
+        dup2(fd, STDOUT_FILENO);  // duplicate old fd into stdout
+        close(fd);
+      }
+    }
+
     execvp(args[0], args);     // Child process execute the cmd
     // execvp fail
     perror(args[0]);
     exit(1);
   }
   else if (pid > 0) {  // Parent process wait for child 
-    int status;
-    waitpid(pid, &status, 0);
+    if (cmd->background) {
+      printf("Started background process PID: %d\n", pid);
+      return; 
+    }
+    else {
+      printf("Waiting for process PID: %d\n", pid);
+      int status;
+      waitpid(pid, &status, 0);
+    }
+
   }
   else {
     perror("fork");
@@ -117,6 +160,15 @@ static void exec_cmd(Command *cmd)
 }
 
 
+
+/*
+ * Handle Ctrl-C signal (SIGINT)
+ */
+static void intHandler() {
+  // kill(0, SIGINT); // Send SIGINT to all processes in the current process group
+  // printf("\n");
+  return;
+} 
 
 
 
