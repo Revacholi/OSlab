@@ -41,7 +41,8 @@ static void print_pgm(Pgm *p);
 void stripwhite(char *);
 
 static void intHandler(int dummy);
-static void chldHandler();
+static int should_exit = 0;
+static void chldHandler(int dummy);
 
 static void exec_cmd(Command *cmd);
 static void exec_single_cmd(Command *cmd);
@@ -396,7 +397,7 @@ static void intHandler(int dummy) {
  * Handle Zombies (SIGCHLD)
  * Process group-aware zombie handling
  */
-static void chldHandler() {
+static void chldHandler(int dummy) {
   pid_t pid;
   int status;
 
