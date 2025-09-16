@@ -19,6 +19,9 @@ The biggest problem we had was with implementing pipes. We started doing it recu
 In the end, we totally rewrote the code with a better from the start.
 
 ### Zombie issues
+One issue we encountered while testing was that zombies were created whenever a background process finished executing. For example, by running `sleep 60` we successfully created the sleep-process in the foreground which in turn blocked the terminal. When the 60 seconds had passed, execution returned as normal and no zombies were created. However, when we instead ran the command `sleep 60 &` we similar to the first case created a sleep-process, but now in the background so the terminal wasn't blocked. As soon as the 60 seconds were up the zombie-counter in the `top` process incremented, once for each background process that finished.
+
+To solve this, we implemented a `chldHandler` function that ran whenever the `SIGCHLD` signal was sent to the parent shell. This handler continuously runs `waitpid` in a non-blocking fashion to make sure all background-zombies are marked as terminated.
 
 ### Ctrl-C issues
 
