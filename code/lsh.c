@@ -41,7 +41,7 @@ static void print_pgm(Pgm *p);
 void stripwhite(char *);
 
 static void intHandler(int dummy);
-static void chldHandler();
+static void chldHandler(int dummy);
 
 static void exec_cmd(Command *cmd);
 static void exec_single_cmd(Command *cmd);
@@ -101,6 +101,7 @@ int main(void)
 
     if (should_exit)
     {
+      printf("Should break...\n");
       break;
     }
   }
@@ -227,7 +228,7 @@ static void exec_single_cmd(Command *cmd)
     }
     
     if (cmd->background) {
-      printf("Started background process PID: %d\n", pid);
+      printf("Started background process PID: %d\n", pid_pipe);
       return; 
     } else {
       foreground = pid;
@@ -396,7 +397,7 @@ static void intHandler(int dummy) {
  * Handle Zombies (SIGCHLD)
  * Process group-aware zombie handling
  */
-static void chldHandler() {
+static void chldHandler(int dummy) {
   pid_t pid;
   int status;
 
