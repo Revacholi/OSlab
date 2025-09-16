@@ -2,10 +2,10 @@
 
 ## Completion of specifications
 
-We split up the completion of the lab, each taking whatever specification we felt like implementing and then presented it to our colleagues whenever we were done or ran into problems.
 
 ### Order
-We wrote the solutions basically in the same order as they were written in the README.md.
+We split up the completion of the lab, each taking whatever specification we felt like implementing and then presented it to our colleagues whenever we were done or ran into problems.
+For the sake of simplicity, we wrote the solutions basically in the same order as they were written in the README.md.
 
 ## Challenges
 
@@ -20,6 +20,6 @@ In the end, we totally rewrote the code with a better from the start.
 
 ## Feedback on the course
 
-# Automated tests
+## Automated tests
 
-# Missing test cases
+## Missing test cases
