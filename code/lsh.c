@@ -204,7 +204,7 @@ static void exec_single_cmd(Command *cmd)
     }
 
     if (cmd->rstdout) {
-      int fd = open(cmd->rstdout, O_WRONLY | O_CREAT | O_TRUNC, 0744);
+      int fd = open(cmd->rstdout, O_WRONLY | O_CREAT | O_TRUNC, 0644);
       if (fd == -1) {
         perror("open rstdout");
         exit(1);
@@ -317,7 +317,7 @@ static void exec_pipeline(Command *cmd, int cmd_count)
       
       // handle output redirection for the last command
       if (i == cmd_count - 1 && cmd->rstdout) {
-        int fd = open(cmd->rstdout, O_WRONLY | O_CREAT | O_TRUNC, 0744);
+        int fd = open(cmd->rstdout, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd == -1) {
           perror("open rstdout");
           exit(1);
@@ -360,10 +360,10 @@ static void exec_pipeline(Command *cmd, int cmd_count)
     printf("Started background pipeline with %d processes\n", cmd_count);
     return;
   } else {
-    // Store the pipeline's process group ID for signal handling (foreground only)
+    // Store the pipeline's process group ID for signal handling
     foreground_pgid = pipeline_pgid;
     foreground = pids[cmd_count - 1]; // Keep compatibility with single process tracking
-
+    
     for (int i = 0; i < cmd_count; i++) {
       int status;
       waitpid(pids[i], &status, 0);
