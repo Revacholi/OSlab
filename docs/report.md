@@ -28,6 +28,10 @@ To solve this, we implemented a `chldHandler` function that ran whenever the `SI
 ## Feedback on the labs
 This was a fun lab that gave us some insights into the inner workings of the unix shell. It is fascinating to learn how much forking happens, even while just running regular commands and especially when using pipes. We also found the specifications were written in a helpful way giving enough details and hints to really help us get started without giving so much information as to totally give the solution for how to implement each specification away for free.
 
-### Automated tests
 
-### Missing test cases
+# Automated tests
+The automated tests were extremely useful for several reasons. It covered all major specifications. When tests failed, the error messages provided clear guidance about what was expected versus what was received, making debugging much easier. Tests like `test_CTRL_C_with_fg_and_bg` helped identify complex scenarios we didn't have considered during manual testing.   
+     
+     
+# Missing test cases
+Tests combining pipes with both input and output redirection simultaneously (e.g., `cat < input.txt | grep pattern > output.txt`) would verify more complex scenarios. Also, test built-in Command Edge Cases like `cd` with no arguments or with invalid paths and proper error handling. Last, maybe it can verify all file descriptors are properly closed after complex pipe chains or background tasks. 
