@@ -39,12 +39,17 @@
 static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
 void stripwhite(char *);
-static void exec_cmd(Command *cmd);
+
 static void intHandler(int dummy);
-static int should_exit = 0;
 static void chldHandler();
 
+static void exec_cmd(Command *cmd);
+static void exec_single_cmd(Command *cmd);
+static void exec_pipeline(Command *cmd, int cmd_count);
+
+static int should_exit = 0; // Flag to indicate if shell should exit
 static pid_t foreground = 0; // PID of current foreground process
+static pid_t foreground_pgid = 0; // Process group ID of current foreground job
 
 int main(void)
 {
@@ -52,6 +57,7 @@ int main(void)
   for (;;)
   {
     foreground = 0;
+    foreground_pgid = 0; // Reset foreground process group ID
 
     char *line;
 
@@ -103,138 +109,133 @@ int main(void)
 }
 
 
+
+
+
 /*
- * Execute after parse
+ * Execute after parse 
  */
 static void exec_cmd(Command *cmd)
 {
   // char *path = getenv("PATH");
   // printf("PATH: %s\n\n", path);
 
-
   if (cmd->pgm == NULL) {
     return;
   }
 
   Pgm *pgm = cmd->pgm;
-  
-  // Get the command name and arguments
+
+  // check for built-in commands (only if single command without pipes)
+  if (pgm->next == NULL) {
+    char **args = pgm->pgmlist;
+    if (args == NULL || args[0] == NULL) {
+      return;
+    }
+    
+    // handle 'cd' and 'exit' built-in commands
+    if (!strcmp("cd", args[0]))
+    {
+      char *dir;
+      if (args[1] != NULL)
+      {
+        dir = args[1];
+      }
+      else
+      {
+        dir = getenv("HOME");
+      }
+      if (chdir(dir))
+      {
+        perror(args[1]);
+      }
+      return;
+    } 
+    else if (!strcmp("exit", args[0]))
+    {
+      should_exit = 1;
+      return;
+    }
+  }
+
+  // Get command count
+  int cmd_count = 0;
+  while (pgm != NULL) {
+    cmd_count++;
+    pgm = pgm->next;
+  }
+
+  // if only single command, execute directly
+  if (cmd_count == 1) {
+    exec_single_cmd(cmd);
+    return;
+  }
+
+  // Handle pipeline
+  exec_pipeline(cmd, cmd_count);
+}
+
+
+/*
+ * execute a single command (no pipes)
+ */
+static void exec_single_cmd(Command *cmd)
+{
+  Pgm *pgm = cmd->pgm;
   char **args = pgm->pgmlist;
-  if (args == NULL || args[0] == NULL) {
-    return;
-  }
   
-
-
-  if (!strcmp("cd", args[0]))
-  {
-    char *dir;
-    if (args[1] != NULL)
-    {
-      dir = args[1];
-    }
-    else
-    {
-      dir = getenv("HOME");
-    }
-    if (chdir(dir))
-    {
-      perror(args[1]);
-    }
-    return;
-  } else if (!strcmp("exit", args[0]))
-  {
-    should_exit = 1;
-    return;
-  }
-  
-
   pid_t pid = fork();
   
   if (pid == 0) {
-    // Child process
-
-    // check if there are multiple commands (then we have pipes)
-    Pgm *ppgm = pgm;
-    while (ppgm->next) {
-      ppgm = ppgm->next;
-      // Create array of two pipe "ends". We will write and read to each end.
-      int pipe_descriptors[2];
-      // Try to create a pipe. If it fails print pipe error and return
-      if(pipe(pipe_descriptors) < 0) {
-        printf("Pipe error!");
-        return;
-      }
-
-      pid_t pid_pipe = fork();
-
-      if (pid_pipe == 0) {  // Child process closes write end
-        close(pipe_descriptors[WRITE_END]);
-        
-        // set output to pipe
-        dup2(pipe_descriptors[READ_END], STDIN_FILENO);  
-        close(pipe_descriptors[READ_END]);
-
-        char **pargs = ppgm->pgmlist;
-        execvp(pargs[0], pargs);     // Parent process execute the cmd
-        // execvp fail
-        perror(pargs[0]);
-        exit(1);     
-      }
-      else if (pid_pipe > 0) {   // Parent process closes read end
-        close(pipe_descriptors[READ_END]);
-        
-        // set output to pipe
-        dup2(pipe_descriptors[WRITE_END], STDOUT_FILENO);  
-        close(pipe_descriptors[WRITE_END]);
-        }
-    }
+    // Child process, handle redirections and execute command
     
-
-    // Handle input redirection
-    if (cmd -> rstdin) {
-      int fd;
-      if ((fd = open(cmd->rstdin, O_RDONLY)) == -1){   // if open fail or no target file
+    // Create new process group for this job
+    // This allows us to control jobs with signals properly
+    setpgid(0, 0); // Set child's process group ID to its own PID
+    
+    if (cmd->rstdin) {
+      int fd = open(cmd->rstdin, O_RDONLY);
+      if (fd == -1) {
         perror("open rstdin");
         exit(1);
       }
-      else {
-        dup2(fd, STDIN_FILENO);  // duplicate old fd into stdin
-        close(fd);
-      }
+      dup2(fd, STDIN_FILENO);
+      close(fd);
     }
 
-    // Handle output redirection
-    if (cmd -> rstdout) {
-      int fd;
-      if ((fd = open(cmd->rstdout, O_WRONLY | O_CREAT)) == -1){ // if open fail or no target file
+    if (cmd->rstdout) {
+      int fd = open(cmd->rstdout, O_WRONLY | O_CREAT | O_TRUNC, 0744);
+      if (fd == -1) {
         perror("open rstdout");
         exit(1);
       }
-      else {
-        dup2(fd, STDOUT_FILENO);  // duplicate old fd into stdout
-        close(fd);
-      }
+      dup2(fd, STDOUT_FILENO);
+      close(fd);
     }
     
-    execvp(args[0], args);     // Child process execute the cmd
-    // execvp fail
+    execvp(args[0], args);
     perror(args[0]);
     exit(1);
   }
-  else if (pid > 0) {  // Parent process wait for child 
+  else if (pid > 0) {
+    // Parent process
+    // Set the process group ID for proper job control
+    setpgid(pid, pid); // Ensure the child is in its own process group
+
+    if (!cmd->background) {
+      foreground_pgid = pid; // Store the process group ID for foreground jobs
+    }
+    
     if (cmd->background) {
       printf("Started background process PID: %d\n", pid);
       return; 
-    }
-    else {
-      foreground = pid;  // Set the foreground process PID
-      printf("Waiting for process PID: %d\n", pid);
+    } else {
+      foreground = pid;
       int status;
       waitpid(pid, &status, 0);
-      foreground = 0; // Reset foreground PID
+      foreground = 0;
+      foreground_pgid = 0; // Reset after job completion
     }
-
   }
   else {
     perror("fork");
@@ -244,25 +245,171 @@ static void exec_cmd(Command *cmd)
 
 
 /*
+ * execute a pipeline of commands
+ */
+static void exec_pipeline(Command *cmd, int cmd_count)
+{
+  // create pipe array, we need cmd_count - 1 pipes for cmd_count commands
+  int pipes[cmd_count-1][2];
+  pid_t pids[cmd_count];
+  pid_t pipeline_pgid = 0; // Process group ID for the entire pipeline
+  
+  // create all pipes we need
+  for (int i = 0; i < cmd_count - 1; i++) {
+    if (pipe(pipes[i]) == -1) {
+      perror("pipe");
+      return;
+    }
+  }
+
+  // convert linked list of Pgm to array for easier access, because list is in reverse order
+  Pgm *pgm_array[cmd_count];
+  Pgm *p = cmd->pgm;
+  for (int i = cmd_count - 1; i >= 0; i--) {
+    pgm_array[i] = p;
+    p = p->next;
+  }
+
+  // create processes for each command
+  for (int i = 0; i < cmd_count; i++) {
+    pids[i] = fork();
+    
+    if (pids[i] == 0) {
+      // child process
+      
+      // Set up process group for pipeline job control
+      // All processes in the pipeline should be in the same process group
+      if (i == 0) {
+        // First process creates the process group
+        setpgid(0, 0); // Create new process group with this process as leader
+      } else {
+        // Subsequent processes join the first process's group
+        setpgid(0, pids[0]); // Join the process group of the first process
+      }
+      
+      // 设置管道连接
+      if (i > 0) {
+        // Not the first command, read from previous pipe
+        dup2(pipes[i-1][READ_END], STDIN_FILENO);
+      }
+      
+      if (i < cmd_count - 1) {
+        // Not the last command, write to next pipe
+        dup2(pipes[i][WRITE_END], STDOUT_FILENO);
+      }
+      
+      // Close all pipe fds in child
+      for (int j = 0; j < cmd_count - 1; j++) {
+        close(pipes[j][READ_END]);
+        close(pipes[j][WRITE_END]);
+      }
+      
+      // handle input redirection for the first command
+      if (i == 0 && cmd->rstdin) {
+        int fd = open(cmd->rstdin, O_RDONLY);
+        if (fd == -1) {
+          perror("open rstdin");
+          exit(1);
+        }
+        dup2(fd, STDIN_FILENO);
+        close(fd);
+      }
+      
+      // handle output redirection for the last command
+      if (i == cmd_count - 1 && cmd->rstdout) {
+        int fd = open(cmd->rstdout, O_WRONLY | O_CREAT | O_TRUNC, 0744);
+        if (fd == -1) {
+          perror("open rstdout");
+          exit(1);
+        }
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+      }
+      
+      // execute command
+      char **args = pgm_array[i]->pgmlist;
+      execvp(args[0], args);
+      perror(args[0]);
+      exit(1);
+    }
+    else if (pids[i] == -1) {
+      perror("fork");
+      return;
+    }
+    else {
+      // Parent process: ensure all children are in the same process group
+      if (i == 0) {
+        // Set up the process group using the first process's PID
+        pipeline_pgid = pids[0];
+        setpgid(pids[0], pids[0]); // Ensure first process is group leader
+      } else {
+        // Add subsequent processes to the same group
+        setpgid(pids[i], pipeline_pgid); // Join the established process group
+      }
+    }
+  }
+
+  // close all pipe fds in parent
+  for (int i = 0; i < cmd_count - 1; i++) {
+    close(pipes[i][READ_END]);
+    close(pipes[i][WRITE_END]);
+  }
+
+  // wait for all child processes
+  if (cmd->background) {
+    printf("Started background pipeline with %d processes\n", cmd_count);
+    return;
+  } else {
+    // Store the pipeline's process group ID for signal handling (foreground only)
+    foreground_pgid = pipeline_pgid;
+    foreground = pids[cmd_count - 1]; // Keep compatibility with single process tracking
+
+    for (int i = 0; i < cmd_count; i++) {
+      int status;
+      waitpid(pids[i], &status, 0);
+    }
+    foreground = 0;
+    foreground_pgid = 0; // Reset after pipeline completion
+  }
+}
+
+
+
+/*
  * Handle Ctrl-C signal (SIGINT)
+ * With process groups, we can send signal to entire job at once
  */
 static void intHandler(int dummy) { 
-  printf("\n");
+  if (foreground_pgid > 0) {
+    // Send SIGTERM to the entire foreground process group
+    // Using negative PID sends signal to process group
+    kill(-foreground_pgid, SIGTERM);
+    printf("\nTerminated foreground job (process group %d)\n", foreground_pgid);
+  } else {
+    printf("\n");
+  }
   return;
 } 
 
 
 /*
  * Handle Zombies (SIGCHLD)
+ * Process group-aware zombie handling
  */
 static void chldHandler() {
   pid_t pid;
   int status;
 
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-    if (pid != foreground) {
-      printf("Zombie %d Killed\n", pid);
+    // Check if this process belongs to the current foreground job
+    pid_t pid_pgid = getpgid(pid);
+    
+    if (pid_pgid != foreground_pgid) {
+      // This is a background process that finished
+      printf("Background process %d finished\n", pid);
     }
+    // For foreground processes, we don't print anything as the parent
+    // will handle them in the wait loop
   }
 
 }

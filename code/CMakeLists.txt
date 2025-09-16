@@ -16,7 +16,7 @@ target_compile_options(lsh PRIVATE "-ggdb3" "-O0" "-Wall" "-Wextra")
 
 # output dir
 set_target_properties(lsh PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 # clean all
