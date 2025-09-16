@@ -228,7 +228,7 @@ static void exec_single_cmd(Command *cmd)
     }
     
     if (cmd->background) {
-      printf("Started background process PID: %d\n", pid_pipe);
+      printf("Started background process PID: %d\n", pid);
       return; 
     } else {
       foreground = pid;
