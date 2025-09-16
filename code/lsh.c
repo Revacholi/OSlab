@@ -41,7 +41,6 @@ static void print_pgm(Pgm *p);
 void stripwhite(char *);
 
 static void intHandler(int dummy);
-static int should_exit = 0;
 static void chldHandler(int dummy);
 
 static void exec_cmd(Command *cmd);
