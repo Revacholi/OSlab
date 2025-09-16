@@ -10,13 +10,17 @@ For the sake of simplicity, we wrote the solutions basically in the same order a
 As an exceptio, we wrote 3 - Background execution last. This was for no particular reason but it didn't cause any problems for us.
 
 ## Challenges
+For the most part the lab chugged along at a nice, stable pace and we got most of it working during a single lab session. We had a few problems with pipes, zombies and Ctrl-C handling which we'll get into below.
 
 ### Pipe issues
 The biggest problem we had was with implementing pipes. We started doing it recursively which proved difficult. At one point we got the pipes working, but in reverse! E.g. instead of 
+
 `cat foo | grep bar | wc -l` counting the number of occurences of `bar` in `foo` it would simply run `cat foo`. To do the piping as expected one had to write
+
 `wc -l | grep bar | cat foo`. 
 
-In the end, we totally rewrote the code with a better from the start.
+In the end, we totally rewrote the code with a better idea from the start.
+Essentially, instead of what we tried to do before where runnning a single command is just a special case of running multiple commands, we now check whether we have a single command or a pipeline consisting of multiple commands piping into each other. In the case where we have a single command we run the function `exec_single_cmd` on that command. On the other hand, if we have a pipeline of commands we made a separate function for handling them. This function, `exec_pipeline` starts off by creating an array of pipes, one for each of the commands, before creating processes for each command and piping them into each other in the correct way.
 
 ### Zombie issues
 One issue we encountered while testing was that zombies were created whenever a background process finished executing. For example, by running `sleep 60` we successfully created the sleep-process in the foreground which in turn blocked the terminal. When the 60 seconds had passed, execution returned as normal and no zombies were created. However, when we instead ran the command `sleep 60 &` we similar to the first case created a sleep-process, but now in the background so the terminal wasn't blocked. As soon as the 60 seconds were up the zombie-counter in the `top` process incremented, once for each background process that finished.
