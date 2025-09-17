@@ -23,7 +23,7 @@ In the end, we totally rewrote the code with a better from the start.
 ### Ctrl-C issues
 
 ## Feedback on the labs
-This was a fun lab that gave us some insights into the inner workings of the unix shell. It is fascinating to learn how much forking happens, even while just running regular commands and especially when using pipes. We also found the specifications were written in a helpful way giving enough details and hints to really help us get started without giving so much information as to totally give the solution for how to implement each specification away for free.
+This was a fun lab that gave us some insightas into the inner workings of the unix shell. It is fascinating to learn how much forking happens, even while just running regular commands and especially when using pipes. We also found the specifications were written in a helpful way giving enough details and hints to really help us get started without giving so much information as to totally give the solution for how to implement each specification away for free.
 
 
 # Automated tests
