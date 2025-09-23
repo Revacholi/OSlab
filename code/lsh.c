@@ -288,7 +288,6 @@ static void exec_pipeline(Command *cmd, int cmd_count)
         setpgid(0, pids[0]); // Join the process group of the first process
       }
       
-      // 设置管道连接
       if (i > 0) {
         // Not the first command, read from previous pipe
         dup2(pipes[i-1][READ_END], STDIN_FILENO);
