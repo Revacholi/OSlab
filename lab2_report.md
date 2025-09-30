@@ -22,6 +22,11 @@ synchronizing multiple threads can be difficult. That is why we want you to expl
 how you chose to synchronize this particular type of activity
 
 ## Time and space complexity 
-This is where you state the time and space complexity of your
-implementation. Note that you can do an informal complexity analysis (formal language or
-proofs are unnecessary).
+Adding the wake time to the thread structure and making sure it's set while initalizing a thread both take O(N) time as they are just a single operation each run once per thread.
+Storing a variable for each thread is also O(N) space complexity.
+
+Timer_sleep has time complexity O(1) for each thread, meaning O(N) in total if we assume we run it on the order of N threads.
+Here we similarily save the intr_level lv giving us O(1) for each thread and O(N) in the multi-thread case.
+
+
+The timer_interrupt function loops through all threads using the thread_foreach function. This calls check_blocked_thread on all threads. The check_blocked_thread function takes O(1) time and so the entire function takes O(N) time.
